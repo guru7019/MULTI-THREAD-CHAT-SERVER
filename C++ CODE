@@ -1,0 +1,76 @@
+#include <iostream>
+#include <thread>
+#include <vector>
+#include <string>
+#include <cstring>
+#include <netinet/in.h>
+#include <unistd.h>
+
+const int PORT = 8080;  // Port number for the server
+
+void handleClient(int clientSocket) {
+    char buffer[256];
+    while (true) {
+        // Clear buffer
+        std::memset(buffer, 0, sizeof(buffer));
+        
+        // Read message from client
+        ssize_t bytesRead = read(clientSocket, buffer, sizeof(buffer) - 1);
+        if (bytesRead <= 0) {
+            std::cout << "Client disconnected.\n";
+            break;
+        }
+
+        std::cout << "Client says: " << buffer << std::endl;
+
+        // Echo the message back to the client
+        write(clientSocket, buffer, bytesRead);
+    }
+    
+    close(clientSocket);
+}
+
+int main() {
+    int serverSocket, clientSocket;
+    struct sockaddr_in serverAddr, clientAddr;
+    socklen_t clientAddrLen = sizeof(clientAddr);
+    
+    // Create socket
+    serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    if (serverSocket < 0) {
+        std::cerr << "Error opening socket\n";
+        return 1;
+    }
+
+    // Set up the server address structure
+    std::memset(&serverAddr, 0, sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
+    serverAddr.sin_port = htons(PORT);
+
+    // Bind the socket to the port
+    if (bind(serverSocket, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        std::cerr << "Error binding socket\n";
+        return 1;
+    }
+
+    // Listen for incoming connections
+    listen(serverSocket, 5);
+    std::cout << "Server is listening on port " << PORT << "\n";
+
+    while (true) {
+        // Accept a new client connection
+        clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr, &clientAddrLen);
+        if (clientSocket < 0) {
+            std::cerr << "Error accepting connection\n";
+            continue;
+        }
+        std::cout << "New client connected.\n";
+        
+        // Handle client in a new thread
+        std::thread(clientHandler, clientSocket).detach(); // Detach to allow it to run independently
+    }
+
+    close(serverSocket);
+    return 0;
+}
